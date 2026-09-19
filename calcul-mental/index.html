@@ -437,7 +437,20 @@
       return list;
     }
     var out = [];
-    for (var j = 0; j < size; j++) out.push(pickExercise(mode));
+    var counts = {};
+    var maxRepeat = Math.max(2, Math.ceil(size / 6));
+    for (var j = 0; j < size; j++) {
+      var ex, tries = 0;
+      do {
+        ex = pickExercise(mode);
+        tries++;
+      } while (
+        tries < 20 &&
+        ((out.length && out[out.length - 1].key === ex.key) || (counts[ex.key] || 0) >= maxRepeat)
+      );
+      counts[ex.key] = (counts[ex.key] || 0) + 1;
+      out.push(ex);
+    }
     return out;
   }
 
