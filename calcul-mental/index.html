@@ -83,7 +83,7 @@
     color: var(--text);
   }
   #session-info { font-weight: 700; color: var(--muted); text-align: right; font-size: 0.95rem; }
-  #session-info .timer { font-size: 1.2rem; color: var(--primary-dark); }
+  #session-info .timer, #session-info .progress { font-size: 1.2rem; color: var(--primary-dark); }
 
   .calc-display {
     background: var(--card);
@@ -194,6 +194,19 @@
     <button class="link-btn" id="btn-reset">Réinitialiser mes statistiques</button>
   </section>
 
+  <section id="screen-setup" class="screen hidden">
+    <div class="session-header">
+      <button class="icon-btn" id="btn-setup-back">← Accueil</button>
+    </div>
+    <h2 id="setup-title">Combien de calculs veux-tu faire ?</h2>
+    <div class="menu" id="setup-sizes">
+      <button data-size="10">10 calculs</button>
+      <button data-size="15">15 calculs</button>
+      <button data-size="20">20 calculs</button>
+      <button data-size="30">30 calculs</button>
+    </div>
+  </section>
+
   <section id="screen-session" class="screen hidden">
     <div class="session-header">
       <button class="icon-btn" id="btn-back">← Accueil</button>
@@ -219,7 +232,7 @@
   </section>
 
   <section id="screen-result" class="screen hidden">
-    <h2>⏱️ Résultat du défi</h2>
+    <h2 id="result-title">⏱️ Résultat du défi</h2>
     <div class="result-card">
       <div class="score" id="result-score">0 / 0</div>
       <div class="line" id="result-time"></div>
@@ -256,7 +269,7 @@
 
   var STORAGE_KEY = "calcul-mental:v1";
   var DEFAULT_STATE = {
-    settings: { tables: [1,2,3,4,5,6,7,8,9,10], families: [9,19,29,39], challengeSize: 20, challengeSeconds: 120 },
+    settings: { tables: [1,2,3,4,5,6,7,8,9,10], families: [9,19,29,39], sessionSize: 20, challengeSeconds: 120 },
     stats: {},
     reviewQueue: [],
     challengeHistory: []
@@ -389,6 +402,7 @@
 
   var screens = {
     home: document.getElementById("screen-home"),
+    setup: document.getElementById("screen-setup"),
     session: document.getElementById("screen-session"),
     result: document.getElementById("screen-result"),
     stats: document.getElementById("screen-stats")
@@ -409,49 +423,68 @@
 
   var session = null;
 
-  function startPractice(mode) {
-    session = {
-      type: "practice",
-      mode: mode,
-      current: null,
-      questionStartTs: 0,
-      answerStr: "",
-      retryBuffer: [],
-      questionIndex: 0
-    };
-    showScreen("session");
-    updateSessionInfo();
-    nextQuestion();
+  var MODE_LABELS = { mult: "Tables de multiplication", addsub: "9 · 19 · 29 · 39", mixed: "Mélange", review: "Révision des points faibles" };
+
+  function buildSessionList(mode, size) {
+    if (mode === "review") {
+      var worst = worstFacts(10);
+      if (!worst.length) return [];
+      var list = [];
+      for (var i = 0; i < size; i++) {
+        var ex = keyToExercise(worst[i % worst.length].key);
+        list.push({ key: worst[i % worst.length].key, text: ex.text, answer: ex.answer });
+      }
+      return list;
+    }
+    var out = [];
+    for (var j = 0; j < size; j++) out.push(pickExercise(mode));
+    return out;
   }
 
-  function startChallenge() {
-    var size = state.settings.challengeSize;
-    var seconds = state.settings.challengeSeconds;
-    var list = [];
-    for (var i = 0; i < size; i++) list.push(pickExercise("mixed"));
+  var pendingSession = null;
+
+  function openSetup(type, mode) {
+    if (mode === "review" && !worstFacts(1).length) {
+      alert("Pas encore de point faible à réviser : entraîne-toi d'abord !");
+      return;
+    }
+    pendingSession = { type: type, mode: mode };
+    document.getElementById("setup-title").textContent =
+      (type === "challenge" ? "Défi (2 min) — " : "") + "Combien de calculs veux-tu faire ?";
+    showScreen("setup");
+  }
+
+  function startSession(type, mode, size) {
+    size = size || state.settings.sessionSize;
+    var list = buildSessionList(mode, size);
+    if (!list.length) return;
     session = {
-      type: "challenge",
+      type: type,
+      mode: mode,
       list: list,
       index: 0,
       correctCount: 0,
       answeredCount: 0,
       totalTimeMs: 0,
-      deadline: Date.now() + seconds * 1000,
       current: null,
       questionStartTs: 0,
       answerStr: "",
+      deadline: null,
       timerHandle: null
     };
     showScreen("session");
-    session.timerHandle = setInterval(tickChallengeTimer, 250);
-    loadChallengeQuestion();
+    if (type === "challenge") {
+      session.deadline = Date.now() + state.settings.challengeSeconds * 1000;
+      session.timerHandle = setInterval(tickChallengeTimer, 250);
+    }
+    loadQuestion();
   }
 
   function tickChallengeTimer() {
     if (!session || session.type !== "challenge") return;
     var remaining = session.deadline - Date.now();
     if (remaining <= 0) {
-      finishChallenge();
+      finishSession();
       return;
     }
     updateSessionInfo(remaining);
@@ -459,42 +492,18 @@
 
   function updateSessionInfo(remainingMs) {
     if (!session) { sessionInfo.textContent = ""; return; }
+    var progress = "Question " + (session.index + 1) + "/" + session.list.length;
     if (session.type === "challenge") {
       var s = Math.max(0, Math.ceil((remainingMs != null ? remainingMs : session.deadline - Date.now()) / 1000));
       var mm = String(Math.floor(s / 60)).padStart(2, "0");
       var ss = String(s % 60).padStart(2, "0");
-      sessionInfo.innerHTML = "Question " + (session.index + 1) + "/" + session.list.length +
-        '<div class="timer">' + mm + ":" + ss + "</div>";
+      sessionInfo.innerHTML = progress + '<div class="timer">' + mm + ":" + ss + "</div>";
     } else {
-      var labels = { mult: "Tables de multiplication", addsub: "9 · 19 · 29 · 39", mixed: "Mélange", review: "Révision des points faibles" };
-      sessionInfo.textContent = labels[session.mode] || "";
+      sessionInfo.innerHTML = (MODE_LABELS[session.mode] || "") + '<div class="progress">' + progress + "</div>";
     }
   }
 
-  function nextQuestion() {
-    if (!session) return;
-    session.questionIndex++;
-    if (session.mode === "review") {
-      var key = session.reviewList[session.reviewIdx % session.reviewList.length];
-      session.reviewIdx++;
-      var rex = keyToExercise(key);
-      session.current = { key: key, text: rex.text, answer: rex.answer };
-    } else {
-      var retry = session.retryBuffer.find(function (r) { return r.dueAt <= session.questionIndex; });
-      if (retry) {
-        session.retryBuffer.splice(session.retryBuffer.indexOf(retry), 1);
-        var ex = keyToExercise(retry.key);
-        session.current = { key: retry.key, text: ex.text, answer: ex.answer };
-      } else {
-        session.current = pickExercise(session.mode);
-      }
-    }
-    session.answerStr = "";
-    session.questionStartTs = Date.now();
-    render();
-  }
-
-  function loadChallengeQuestion() {
+  function loadQuestion() {
     session.current = session.list[session.index];
     session.answerStr = "";
     session.questionStartTs = Date.now();
@@ -534,60 +543,43 @@
     feedback.className = "feedback " + (correct ? "correct" : "wrong");
     feedback.textContent = correct ? pickFrom(messages) : ("Réponse : " + session.current.answer);
 
-    if (session.type === "challenge") {
-      session.answeredCount++;
-      session.totalTimeMs += elapsed;
-      if (correct) session.correctCount++;
-      session.index++;
-      setTimeout(function () {
-        if (session.index >= session.list.length) {
-          finishChallenge();
-        } else {
-          loadChallengeQuestion();
-        }
-      }, correct ? 500 : 1100);
-    } else {
-      if (!correct) {
-        session.retryBuffer.push({ key: session.current.key, dueAt: session.questionIndex + 3 });
+    session.answeredCount++;
+    session.totalTimeMs += elapsed;
+    if (correct) session.correctCount++;
+    session.index++;
+
+    setTimeout(function () {
+      if (!session) return;
+      if (session.index >= session.list.length) {
+        finishSession();
+      } else {
+        loadQuestion();
       }
-      setTimeout(nextQuestion, correct ? 500 : 1100);
-    }
+    }, correct ? 500 : 1100);
   }
 
-  function finishChallenge() {
+  function finishSession() {
     if (session.timerHandle) clearInterval(session.timerHandle);
     var s = session;
     session = null;
     var avg = s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount / 100) / 10 : 0;
-    state.challengeHistory.push({
-      date: new Date().toISOString(),
-      score: s.correctCount,
-      total: s.answeredCount,
-      avgTimeMs: s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount) : 0
-    });
-    saveState();
+    if (s.type === "challenge") {
+      state.challengeHistory.push({
+        date: new Date().toISOString(),
+        score: s.correctCount,
+        total: s.answeredCount,
+        avgTimeMs: s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount) : 0
+      });
+      saveState();
+    }
+    document.getElementById("result-title").textContent = s.type === "challenge"
+      ? "⏱️ Résultat du défi"
+      : "✅ Séance terminée — " + (MODE_LABELS[s.mode] || "");
     document.getElementById("result-score").textContent = s.correctCount + " / " + s.answeredCount;
     document.getElementById("result-time").textContent = "Temps moyen par calcul : " + avg + " s";
     document.getElementById("result-errors").textContent = (s.answeredCount - s.correctCount) + " erreur(s)";
+    document.getElementById("btn-result-replay").onclick = function () { openSetup(s.type, s.mode); };
     showScreen("result");
-  }
-
-  function startReview() {
-    var worst = worstFacts(10);
-    if (!worst.length) return;
-    session = {
-      type: "practice",
-      mode: "review",
-      reviewList: worst.map(function (w) { return w.key; }),
-      reviewIdx: 0,
-      current: null,
-      questionStartTs: 0,
-      answerStr: "",
-      retryBuffer: [],
-      questionIndex: 0
-    };
-    showScreen("session");
-    nextQuestion();
   }
 
   function renderStatsScreen() {
@@ -612,9 +604,9 @@
   }
 
   document.querySelectorAll("#screen-home .menu button[data-mode]").forEach(function (btn) {
-    btn.addEventListener("click", function () { startPractice(btn.getAttribute("data-mode")); });
+    btn.addEventListener("click", function () { openSetup("practice", btn.getAttribute("data-mode")); });
   });
-  document.getElementById("btn-challenge").addEventListener("click", startChallenge);
+  document.getElementById("btn-challenge").addEventListener("click", function () { openSetup("challenge", "mixed"); });
   document.getElementById("btn-stats").addEventListener("click", function () {
     renderStatsScreen();
     showScreen("stats");
@@ -627,9 +619,22 @@
     }
   });
   document.getElementById("btn-stats-home").addEventListener("click", function () { showScreen("home"); });
-  document.getElementById("btn-review-worst").addEventListener("click", startReview);
+  document.getElementById("btn-review-worst").addEventListener("click", function () { openSetup("practice", "review"); });
   document.getElementById("btn-result-home").addEventListener("click", function () { showScreen("home"); });
-  document.getElementById("btn-result-replay").addEventListener("click", startChallenge);
+
+  document.getElementById("setup-sizes").addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-size]");
+    if (!btn || !pendingSession) return;
+    var size = Number(btn.getAttribute("data-size"));
+    state.settings.sessionSize = size;
+    saveState();
+    startSession(pendingSession.type, pendingSession.mode, size);
+    pendingSession = null;
+  });
+  document.getElementById("btn-setup-back").addEventListener("click", function () {
+    pendingSession = null;
+    showScreen("home");
+  });
 
   document.getElementById("btn-back").addEventListener("click", function () {
     if (session && session.timerHandle) clearInterval(session.timerHandle);
