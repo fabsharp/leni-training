@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calcul Mental - Léni</title>
+<style>
+  :root {
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --text: #223;
+    --primary: #4f7cff;
+    --primary-dark: #3a5fd9;
+    --green: #2fb872;
+    --red: #e0525f;
+    --orange: #ff9f43;
+    --muted: #7a8494;
+    --shadow: 0 6px 18px rgba(30,50,90,0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 20px 16px 32px;
+    display: flex;
+    flex-direction: column;
+  }
+  .hidden { display: none !important; }
+  h1 { text-align: center; font-size: 2rem; margin: 8px 0 24px; }
+  h2 { text-align: center; margin: 4px 0 16px; }
+
+  .menu { display: flex; flex-direction: column; gap: 14px; }
+  .menu button {
+    font-size: 1.15rem;
+    padding: 18px 16px;
+    border: none;
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .menu button:active { transform: scale(0.97); }
+  .menu button.primary { background: var(--primary); color: white; }
+  .menu button.accent { background: var(--orange); color: white; }
+
+  .link-btn {
+    margin-top: 28px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+    align-self: center;
+  }
+
+  .session-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .icon-btn {
+    background: var(--card);
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 0.95rem;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    color: var(--text);
+  }
+  #session-info { font-weight: 700; color: var(--muted); text-align: right; font-size: 0.95rem; }
+  #session-info .timer { font-size: 1.2rem; color: var(--primary-dark); }
+
+  .calc-display {
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    font-size: 2.4rem;
+    font-weight: 700;
+    padding: 28px 10px;
+    margin: 18px 0 10px;
+    letter-spacing: 1px;
+  }
+  .answer-display {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 700;
+    min-height: 2.6rem;
+    color: var(--primary-dark);
+    letter-spacing: 2px;
+  }
+  .feedback {
+    text-align: center;
+    min-height: 1.6rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 4px;
+  }
+  .feedback.correct { color: var(--green); }
+  .feedback.wrong { color: var(--red); }
+
+  .calc-display.flash-correct { animation: flashGreen 0.5s ease; }
+  .calc-display.flash-wrong { animation: flashRed 0.5s ease; }
+  @keyframes flashGreen {
+    0% { background: var(--green); color: white; }
+    100% { background: var(--card); color: var(--text); }
+  }
+  @keyframes flashRed {
+    0% { background: var(--red); color: white; }
+    100% { background: var(--card); color: var(--text); }
+  }
+
+  .keypad {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding-top: 20px;
+  }
+  .key {
+    font-size: 1.6rem;
+    font-weight: 700;
+    padding: 18px 0;
+    border: none;
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    color: var(--text);
+  }
+  .key:active { transform: scale(0.95); }
+  .key.ok { background: var(--green); color: white; }
+  .key.erase { background: var(--orange); color: white; }
+
+  table#stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    font-size: 0.9rem;
+  }
+  table#stats-table th, table#stats-table td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid #eef1f6;
+  }
+  table#stats-table th { background: #eef2fb; color: var(--muted); font-size: 0.78rem; }
+  #stats-empty { text-align: center; color: var(--muted); margin: 30px 0; }
+
+  .result-card {
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 28px 20px;
+    text-align: center;
+    margin: 20px 0;
+  }
+  .result-card .score { font-size: 2.6rem; font-weight: 800; color: var(--primary-dark); }
+  .result-card .line { margin: 6px 0; color: var(--muted); }
+
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .actions button { flex: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <section id="screen-home" class="screen">
+    <h1>🧮 Calcul Mental</h1>
+    <div class="menu">
+      <button class="primary" data-mode="mult">✖️ Tables de multiplication</button>
+      <button class="primary" data-mode="addsub">➕➖ 9 · 19 · 29 · 39</button>
+      <button class="primary" data-mode="mixed">🎲 Mélange</button>
+      <button class="accent" id="btn-challenge">⏱️ Défi chronométré</button>
+      <button id="btn-stats">📊 Mes points faibles</button>
+    </div>
+    <button class="link-btn" id="btn-reset">Réinitialiser mes statistiques</button>
+  </section>
+
+  <section id="screen-session" class="screen hidden">
+    <div class="session-header">
+      <button class="icon-btn" id="btn-back">← Accueil</button>
+      <div id="session-info"></div>
+    </div>
+    <div class="calc-display" id="calc-display">7 × 8</div>
+    <div class="answer-display" id="answer-display">&nbsp;</div>
+    <div class="feedback" id="feedback">&nbsp;</div>
+    <div class="keypad" id="keypad">
+      <button class="key" data-key="1">1</button>
+      <button class="key" data-key="2">2</button>
+      <button class="key" data-key="3">3</button>
+      <button class="key" data-key="4">4</button>
+      <button class="key" data-key="5">5</button>
+      <button class="key" data-key="6">6</button>
+      <button class="key" data-key="7">7</button>
+      <button class="key" data-key="8">8</button>
+      <button class="key" data-key="9">9</button>
+      <button class="key erase" data-key="back">⌫</button>
+      <button class="key" data-key="0">0</button>
+      <button class="key ok" data-key="ok">✓</button>
+    </div>
+  </section>
+
+  <section id="screen-result" class="screen hidden">
+    <h2>⏱️ Résultat du défi</h2>
+    <div class="result-card">
+      <div class="score" id="result-score">0 / 0</div>
+      <div class="line" id="result-time"></div>
+      <div class="line" id="result-errors"></div>
+    </div>
+    <div class="actions">
+      <button class="icon-btn" id="btn-result-home">Accueil</button>
+      <button class="icon-btn" id="btn-result-replay">Rejouer</button>
+    </div>
+  </section>
+
+  <section id="screen-stats" class="screen hidden">
+    <h2>📊 Mes points faibles</h2>
+    <div id="stats-empty" class="hidden">Bravo, pas encore assez de données ou aucun point faible !</div>
+    <div style="overflow-x:auto">
+      <table id="stats-table">
+        <thead>
+          <tr><th>Calcul</th><th>Essais</th><th>Erreurs</th><th>Temps moy.</th></tr>
+        </thead>
+        <tbody id="stats-body"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="icon-btn" id="btn-review-worst">Revoir ces calculs</button>
+      <button class="icon-btn" id="btn-stats-home">Accueil</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "calcul-mental:v1";
+  var DEFAULT_STATE = {
+    settings: { tables: [1,2,3,4,5,6,7,8,9,10], families: [9,19,29,39], challengeSize: 20, challengeSeconds: 120 },
+    stats: {},
+    reviewQueue: [],
+    challengeHistory: []
+  };
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      var parsed = JSON.parse(raw);
+      return {
+        settings: Object.assign({}, DEFAULT_STATE.settings, parsed.settings || {}),
+        stats: parsed.stats || {},
+        reviewQueue: parsed.reviewQueue || [],
+        challengeHistory: parsed.challengeHistory || []
+      };
+    } catch (e) {
+      return JSON.parse(JSON.stringify(DEFAULT_STATE));
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  var state = loadState();
+
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function pickFrom(arr) { return arr[randInt(0, arr.length - 1)]; }
+
+  function generateMult() {
+    var tables = state.settings.tables.length ? state.settings.tables : DEFAULT_STATE.settings.tables;
+    var a = pickFrom(tables);
+    var b = randInt(1, 10);
+    var lo = Math.min(a, b), hi = Math.max(a, b);
+    return { key: "mult:" + lo + "x" + hi, text: a + " × " + b, answer: a * b };
+  }
+
+  function generateAddSub() {
+    var families = state.settings.families.length ? state.settings.families : DEFAULT_STATE.settings.families;
+    var family = pickFrom(families);
+    var op = Math.random() < 0.5 ? "+" : "-";
+    var base;
+    if (op === "+") {
+      base = randInt(11, 99 - family);
+      return { key: "add:" + base + "+" + family, text: base + " + " + family, answer: base + family };
+    } else {
+      base = randInt(family + 1, 99);
+      return { key: "sub:" + base + "-" + family, text: base + " - " + family, answer: base - family };
+    }
+  }
+
+  function keyToExercise(key) {
+    var idx, a, b;
+    if (key.indexOf("mult:") === 0) {
+      idx = key.slice(5).split("x");
+      a = Number(idx[0]); b = Number(idx[1]);
+      return { text: a + " × " + b, answer: a * b };
+    }
+    if (key.indexOf("add:") === 0) {
+      idx = key.slice(4).split("+");
+      a = Number(idx[0]); b = Number(idx[1]);
+      return { text: a + " + " + b, answer: a + b };
+    }
+    if (key.indexOf("sub:") === 0) {
+      idx = key.slice(4).split("-");
+      a = Number(idx[0]); b = Number(idx[1]);
+      return { text: a + " - " + b, answer: a - b };
+    }
+    return null;
+  }
+
+  function generateFresh(mode) {
+    if (mode === "mult") return generateMult();
+    if (mode === "addsub") return generateAddSub();
+    return Math.random() < 0.5 ? generateMult() : generateAddSub();
+  }
+
+  function pickExercise(mode) {
+    if (state.reviewQueue.length > 0 && Math.random() < 0.3) {
+      var key = pickFrom(state.reviewQueue);
+      var ex = keyToExercise(key);
+      if (ex) return { key: key, text: ex.text, answer: ex.answer };
+    }
+    return generateFresh(mode);
+  }
+
+  function ensureStat(key) {
+    if (!state.stats[key]) {
+      state.stats[key] = { attempts: 0, errors: 0, totalTimeMs: 0, lastSeen: 0 };
+    }
+    return state.stats[key];
+  }
+
+  function recordAttempt(key, correct, elapsedMs) {
+    var s = ensureStat(key);
+    s.attempts += 1;
+    s.totalTimeMs += elapsedMs;
+    s.lastSeen = Date.now();
+    if (!correct) {
+      s.errors += 1;
+      if (state.reviewQueue.indexOf(key) === -1) state.reviewQueue.push(key);
+    } else {
+      var idx = state.reviewQueue.indexOf(key);
+      if (idx !== -1) state.reviewQueue.splice(idx, 1);
+    }
+    saveState();
+  }
+
+  function worstFacts(limit) {
+    var list = Object.keys(state.stats).map(function (key) {
+      var s = state.stats[key];
+      return {
+        key: key,
+        attempts: s.attempts,
+        errors: s.errors,
+        errorRate: s.errors / s.attempts,
+        avgTime: s.totalTimeMs / s.attempts
+      };
+    });
+    list.sort(function (a, b) {
+      if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
+      return b.avgTime - a.avgTime;
+    });
+    return limit ? list.slice(0, limit) : list;
+  }
+
+  var screens = {
+    home: document.getElementById("screen-home"),
+    session: document.getElementById("screen-session"),
+    result: document.getElementById("screen-result"),
+    stats: document.getElementById("screen-stats")
+  };
+
+  function showScreen(name) {
+    Object.keys(screens).forEach(function (k) {
+      screens[k].classList.toggle("hidden", k !== name);
+    });
+  }
+
+  var calcDisplay = document.getElementById("calc-display");
+  var answerDisplay = document.getElementById("answer-display");
+  var feedback = document.getElementById("feedback");
+  var sessionInfo = document.getElementById("session-info");
+
+  var messages = ["Bravo !", "Super !", "Génial !", "Trop fort !", "Continue !"];
+
+  var session = null;
+
+  function startPractice(mode) {
+    session = {
+      type: "practice",
+      mode: mode,
+      current: null,
+      questionStartTs: 0,
+      answerStr: "",
+      retryBuffer: [],
+      questionIndex: 0
+    };
+    showScreen("session");
+    updateSessionInfo();
+    nextQuestion();
+  }
+
+  function startChallenge() {
+    var size = state.settings.challengeSize;
+    var seconds = state.settings.challengeSeconds;
+    var list = [];
+    for (var i = 0; i < size; i++) list.push(pickExercise("mixed"));
+    session = {
+      type: "challenge",
+      list: list,
+      index: 0,
+      correctCount: 0,
+      answeredCount: 0,
+      totalTimeMs: 0,
+      deadline: Date.now() + seconds * 1000,
+      current: null,
+      questionStartTs: 0,
+      answerStr: "",
+      timerHandle: null
+    };
+    showScreen("session");
+    session.timerHandle = setInterval(tickChallengeTimer, 250);
+    loadChallengeQuestion();
+  }
+
+  function tickChallengeTimer() {
+    if (!session || session.type !== "challenge") return;
+    var remaining = session.deadline - Date.now();
+    if (remaining <= 0) {
+      finishChallenge();
+      return;
+    }
+    updateSessionInfo(remaining);
+  }
+
+  function updateSessionInfo(remainingMs) {
+    if (!session) { sessionInfo.textContent = ""; return; }
+    if (session.type === "challenge") {
+      var s = Math.max(0, Math.ceil((remainingMs != null ? remainingMs : session.deadline - Date.now()) / 1000));
+      var mm = String(Math.floor(s / 60)).padStart(2, "0");
+      var ss = String(s % 60).padStart(2, "0");
+      sessionInfo.innerHTML = "Question " + (session.index + 1) + "/" + session.list.length +
+        '<div class="timer">' + mm + ":" + ss + "</div>";
+    } else {
+      var labels = { mult: "Tables de multiplication", addsub: "9 · 19 · 29 · 39", mixed: "Mélange", review: "Révision des points faibles" };
+      sessionInfo.textContent = labels[session.mode] || "";
+    }
+  }
+
+  function nextQuestion() {
+    if (!session) return;
+    session.questionIndex++;
+    if (session.mode === "review") {
+      var key = session.reviewList[session.reviewIdx % session.reviewList.length];
+      session.reviewIdx++;
+      var rex = keyToExercise(key);
+      session.current = { key: key, text: rex.text, answer: rex.answer };
+    } else {
+      var retry = session.retryBuffer.find(function (r) { return r.dueAt <= session.questionIndex; });
+      if (retry) {
+        session.retryBuffer.splice(session.retryBuffer.indexOf(retry), 1);
+        var ex = keyToExercise(retry.key);
+        session.current = { key: retry.key, text: ex.text, answer: ex.answer };
+      } else {
+        session.current = pickExercise(session.mode);
+      }
+    }
+    session.answerStr = "";
+    session.questionStartTs = Date.now();
+    render();
+  }
+
+  function loadChallengeQuestion() {
+    session.current = session.list[session.index];
+    session.answerStr = "";
+    session.questionStartTs = Date.now();
+    render();
+  }
+
+  function render() {
+    calcDisplay.className = "calc-display";
+    calcDisplay.textContent = session.current.text + " = ?";
+    answerDisplay.textContent = session.answerStr || " ";
+    feedback.textContent = " ";
+    feedback.className = "feedback";
+    updateSessionInfo();
+  }
+
+  function appendDigit(d) {
+    if (!session || session.answerStr.length >= 4) return;
+    session.answerStr += d;
+    answerDisplay.textContent = session.answerStr;
+  }
+
+  function eraseDigit() {
+    if (!session) return;
+    session.answerStr = session.answerStr.slice(0, -1);
+    answerDisplay.textContent = session.answerStr || " ";
+  }
+
+  function submitAnswer() {
+    if (!session || session.answerStr === "") return;
+    var value = Number(session.answerStr);
+    var elapsed = Date.now() - session.questionStartTs;
+    var correct = value === session.current.answer;
+
+    recordAttempt(session.current.key, correct, elapsed);
+
+    calcDisplay.classList.add(correct ? "flash-correct" : "flash-wrong");
+    feedback.className = "feedback " + (correct ? "correct" : "wrong");
+    feedback.textContent = correct ? pickFrom(messages) : ("Réponse : " + session.current.answer);
+
+    if (session.type === "challenge") {
+      session.answeredCount++;
+      session.totalTimeMs += elapsed;
+      if (correct) session.correctCount++;
+      session.index++;
+      setTimeout(function () {
+        if (session.index >= session.list.length) {
+          finishChallenge();
+        } else {
+          loadChallengeQuestion();
+        }
+      }, correct ? 500 : 1100);
+    } else {
+      if (!correct) {
+        session.retryBuffer.push({ key: session.current.key, dueAt: session.questionIndex + 3 });
+      }
+      setTimeout(nextQuestion, correct ? 500 : 1100);
+    }
+  }
+
+  function finishChallenge() {
+    if (session.timerHandle) clearInterval(session.timerHandle);
+    var s = session;
+    session = null;
+    var avg = s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount / 100) / 10 : 0;
+    state.challengeHistory.push({
+      date: new Date().toISOString(),
+      score: s.correctCount,
+      total: s.answeredCount,
+      avgTimeMs: s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount) : 0
+    });
+    saveState();
+    document.getElementById("result-score").textContent = s.correctCount + " / " + s.answeredCount;
+    document.getElementById("result-time").textContent = "Temps moyen par calcul : " + avg + " s";
+    document.getElementById("result-errors").textContent = (s.answeredCount - s.correctCount) + " erreur(s)";
+    showScreen("result");
+  }
+
+  function startReview() {
+    var worst = worstFacts(10);
+    if (!worst.length) return;
+    session = {
+      type: "practice",
+      mode: "review",
+      reviewList: worst.map(function (w) { return w.key; }),
+      reviewIdx: 0,
+      current: null,
+      questionStartTs: 0,
+      answerStr: "",
+      retryBuffer: [],
+      questionIndex: 0
+    };
+    showScreen("session");
+    nextQuestion();
+  }
+
+  function renderStatsScreen() {
+    var body = document.getElementById("stats-body");
+    var empty = document.getElementById("stats-empty");
+    var all = worstFacts();
+    body.innerHTML = "";
+    if (!all.length) {
+      empty.classList.remove("hidden");
+    } else {
+      empty.classList.add("hidden");
+      all.forEach(function (f) {
+        var tr = document.createElement("tr");
+        var errPct = Math.round(f.errorRate * 100);
+        tr.innerHTML = "<td>" + keyToExercise(f.key).text + "</td>" +
+          "<td>" + f.attempts + "</td>" +
+          "<td>" + f.errors + " (" + errPct + "%)</td>" +
+          "<td>" + (Math.round(f.avgTime) / 1000).toFixed(1) + " s</td>";
+        body.appendChild(tr);
+      });
+    }
+  }
+
+  document.querySelectorAll("#screen-home .menu button[data-mode]").forEach(function (btn) {
+    btn.addEventListener("click", function () { startPractice(btn.getAttribute("data-mode")); });
+  });
+  document.getElementById("btn-challenge").addEventListener("click", startChallenge);
+  document.getElementById("btn-stats").addEventListener("click", function () {
+    renderStatsScreen();
+    showScreen("stats");
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    if (confirm("Effacer toutes les statistiques de Léni ?")) {
+      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      saveState();
+      alert("Statistiques réinitialisées.");
+    }
+  });
+  document.getElementById("btn-stats-home").addEventListener("click", function () { showScreen("home"); });
+  document.getElementById("btn-review-worst").addEventListener("click", startReview);
+  document.getElementById("btn-result-home").addEventListener("click", function () { showScreen("home"); });
+  document.getElementById("btn-result-replay").addEventListener("click", startChallenge);
+
+  document.getElementById("btn-back").addEventListener("click", function () {
+    if (session && session.timerHandle) clearInterval(session.timerHandle);
+    session = null;
+    showScreen("home");
+  });
+
+  document.getElementById("keypad").addEventListener("click", function (e) {
+    var btn = e.target.closest(".key");
+    if (!btn || !session) return;
+    var k = btn.getAttribute("data-key");
+    if (k === "back") eraseDigit();
+    else if (k === "ok") submitAnswer();
+    else appendDigit(k);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!session || screens.session.classList.contains("hidden")) return;
+    if (e.key >= "0" && e.key <= "9") appendDigit(e.key);
+    else if (e.key === "Backspace") eraseDigit();
+    else if (e.key === "Enter") submitAnswer();
+  });
+
+  showScreen("home");
+})();
+</script>
+</body>
+</html>
