@@ -55,6 +55,19 @@
   .menu button.primary { background: var(--primary); color: white; }
   .menu button.accent { background: var(--orange); color: white; }
 
+  .menu button .code {
+    display: inline-block;
+    margin-right: 10px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.25);
+    font-size: 0.9rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .category { margin-bottom: 22px; }
+  .category h3 { margin: 0 0 10px 4px; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
   .link-btn {
     margin-top: 28px;
     background: none;
@@ -184,10 +197,8 @@
 
   <section id="screen-home" class="screen">
     <h1>🧮 Calcul Mental</h1>
-    <div class="menu">
-      <button class="primary" data-mode="mult">✖️ Tables de multiplication</button>
-      <button class="primary" data-mode="addsub">➕➖ 9 · 19 · 29 · 39</button>
-      <button class="primary" data-mode="mixed">🎲 Mélange</button>
+    <div id="home-categories"></div>
+    <div class="menu" id="home-menu">
       <button class="accent" id="btn-challenge">⏱️ Défi chronométré</button>
       <button id="btn-stats">📊 Mes points faibles</button>
     </div>
@@ -199,12 +210,7 @@
       <button class="icon-btn" id="btn-setup-back">← Accueil</button>
     </div>
     <h2 id="setup-title">Combien de calculs veux-tu faire ?</h2>
-    <div class="menu" id="setup-sizes">
-      <button data-size="10">10 calculs</button>
-      <button data-size="15">15 calculs</button>
-      <button data-size="20">20 calculs</button>
-      <button data-size="30">30 calculs</button>
-    </div>
+    <div class="menu" id="setup-sizes"></div>
   </section>
 
   <section id="screen-session" class="screen hidden">
@@ -246,11 +252,11 @@
 
   <section id="screen-stats" class="screen hidden">
     <h2>📊 Mes points faibles</h2>
-    <div id="stats-empty" class="hidden">Bravo, pas encore assez de données ou aucun point faible !</div>
+    <div id="stats-empty" class="hidden">Bravo, aucun point faible pour le moment !</div>
     <div style="overflow-x:auto">
       <table id="stats-table">
         <thead>
-          <tr><th>Calcul</th><th>Essais</th><th>Erreurs</th><th>Temps moy.</th></tr>
+          <tr><th>Calcul</th><th>Essais</th><th>Erreurs</th><th>Temps récent</th><th>À revoir car</th></tr>
         </thead>
         <tbody id="stats-body"></tbody>
       </table>
@@ -263,416 +269,8 @@
 
 </div>
 
-<script>
-(function () {
-  "use strict";
-
-  var STORAGE_KEY = "calcul-mental:v1";
-  var DEFAULT_STATE = {
-    settings: { tables: [1,2,3,4,5,6,7,8,9,10], families: [9,19,29,39], sessionSize: 20, challengeSeconds: 120 },
-    stats: {},
-    reviewQueue: [],
-    challengeHistory: []
-  };
-
-  function loadState() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
-      var parsed = JSON.parse(raw);
-      return {
-        settings: Object.assign({}, DEFAULT_STATE.settings, parsed.settings || {}),
-        stats: parsed.stats || {},
-        reviewQueue: parsed.reviewQueue || [],
-        challengeHistory: parsed.challengeHistory || []
-      };
-    } catch (e) {
-      return JSON.parse(JSON.stringify(DEFAULT_STATE));
-    }
-  }
-
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
-
-  var state = loadState();
-
-  function randInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-
-  function pickFrom(arr) { return arr[randInt(0, arr.length - 1)]; }
-
-  function generateMult() {
-    var tables = state.settings.tables.length ? state.settings.tables : DEFAULT_STATE.settings.tables;
-    var a = pickFrom(tables);
-    var b = randInt(1, 10);
-    var lo = Math.min(a, b), hi = Math.max(a, b);
-    return { key: "mult:" + lo + "x" + hi, text: a + " × " + b, answer: a * b };
-  }
-
-  function generateAddSub() {
-    var families = state.settings.families.length ? state.settings.families : DEFAULT_STATE.settings.families;
-    var family = pickFrom(families);
-    var op = Math.random() < 0.5 ? "+" : "-";
-    var base;
-    if (op === "+") {
-      base = randInt(11, 99 - family);
-      return { key: "add:" + base + "+" + family, text: base + " + " + family, answer: base + family };
-    } else {
-      base = randInt(family + 1, 99);
-      return { key: "sub:" + base + "-" + family, text: base + " - " + family, answer: base - family };
-    }
-  }
-
-  function keyToExercise(key) {
-    var idx, a, b;
-    if (key.indexOf("mult:") === 0) {
-      idx = key.slice(5).split("x");
-      a = Number(idx[0]); b = Number(idx[1]);
-      return { text: a + " × " + b, answer: a * b };
-    }
-    if (key.indexOf("add:") === 0) {
-      idx = key.slice(4).split("+");
-      a = Number(idx[0]); b = Number(idx[1]);
-      return { text: a + " + " + b, answer: a + b };
-    }
-    if (key.indexOf("sub:") === 0) {
-      idx = key.slice(4).split("-");
-      a = Number(idx[0]); b = Number(idx[1]);
-      return { text: a + " - " + b, answer: a - b };
-    }
-    return null;
-  }
-
-  function generateFresh(mode) {
-    if (mode === "mult") return generateMult();
-    if (mode === "addsub") return generateAddSub();
-    return Math.random() < 0.5 ? generateMult() : generateAddSub();
-  }
-
-  function pickExercise(mode) {
-    if (state.reviewQueue.length > 0 && Math.random() < 0.3) {
-      var key = pickFrom(state.reviewQueue);
-      var ex = keyToExercise(key);
-      if (ex) return { key: key, text: ex.text, answer: ex.answer };
-    }
-    return generateFresh(mode);
-  }
-
-  function ensureStat(key) {
-    if (!state.stats[key]) {
-      state.stats[key] = { attempts: 0, errors: 0, totalTimeMs: 0, lastSeen: 0 };
-    }
-    return state.stats[key];
-  }
-
-  function recordAttempt(key, correct, elapsedMs) {
-    var s = ensureStat(key);
-    s.attempts += 1;
-    s.totalTimeMs += elapsedMs;
-    s.lastSeen = Date.now();
-    if (!correct) {
-      s.errors += 1;
-      if (state.reviewQueue.indexOf(key) === -1) state.reviewQueue.push(key);
-    } else {
-      var idx = state.reviewQueue.indexOf(key);
-      if (idx !== -1) state.reviewQueue.splice(idx, 1);
-    }
-    saveState();
-  }
-
-  function worstFacts(limit) {
-    var list = Object.keys(state.stats).map(function (key) {
-      var s = state.stats[key];
-      return {
-        key: key,
-        attempts: s.attempts,
-        errors: s.errors,
-        errorRate: s.errors / s.attempts,
-        avgTime: s.totalTimeMs / s.attempts
-      };
-    });
-    list.sort(function (a, b) {
-      if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
-      return b.avgTime - a.avgTime;
-    });
-    return limit ? list.slice(0, limit) : list;
-  }
-
-  var screens = {
-    home: document.getElementById("screen-home"),
-    setup: document.getElementById("screen-setup"),
-    session: document.getElementById("screen-session"),
-    result: document.getElementById("screen-result"),
-    stats: document.getElementById("screen-stats")
-  };
-
-  function showScreen(name) {
-    Object.keys(screens).forEach(function (k) {
-      screens[k].classList.toggle("hidden", k !== name);
-    });
-  }
-
-  var calcDisplay = document.getElementById("calc-display");
-  var answerDisplay = document.getElementById("answer-display");
-  var feedback = document.getElementById("feedback");
-  var sessionInfo = document.getElementById("session-info");
-
-  var messages = ["Bravo !", "Super !", "Génial !", "Trop fort !", "Continue !"];
-
-  var session = null;
-
-  var MODE_LABELS = { mult: "Tables de multiplication", addsub: "9 · 19 · 29 · 39", mixed: "Mélange", review: "Révision des points faibles" };
-
-  function buildSessionList(mode, size) {
-    if (mode === "review") {
-      var worst = worstFacts(10);
-      if (!worst.length) return [];
-      var list = [];
-      for (var i = 0; i < size; i++) {
-        var ex = keyToExercise(worst[i % worst.length].key);
-        list.push({ key: worst[i % worst.length].key, text: ex.text, answer: ex.answer });
-      }
-      return list;
-    }
-    var out = [];
-    var counts = {};
-    var maxRepeat = Math.max(2, Math.ceil(size / 6));
-    for (var j = 0; j < size; j++) {
-      var ex, tries = 0;
-      do {
-        ex = pickExercise(mode);
-        tries++;
-      } while (
-        tries < 20 &&
-        ((out.length && out[out.length - 1].key === ex.key) || (counts[ex.key] || 0) >= maxRepeat)
-      );
-      counts[ex.key] = (counts[ex.key] || 0) + 1;
-      out.push(ex);
-    }
-    return out;
-  }
-
-  var pendingSession = null;
-
-  function openSetup(type, mode) {
-    if (mode === "review" && !worstFacts(1).length) {
-      alert("Pas encore de point faible à réviser : entraîne-toi d'abord !");
-      return;
-    }
-    pendingSession = { type: type, mode: mode };
-    document.getElementById("setup-title").textContent =
-      (type === "challenge" ? "Défi (2 min) — " : "") + "Combien de calculs veux-tu faire ?";
-    showScreen("setup");
-  }
-
-  function startSession(type, mode, size) {
-    size = size || state.settings.sessionSize;
-    var list = buildSessionList(mode, size);
-    if (!list.length) return;
-    session = {
-      type: type,
-      mode: mode,
-      list: list,
-      index: 0,
-      correctCount: 0,
-      answeredCount: 0,
-      totalTimeMs: 0,
-      current: null,
-      questionStartTs: 0,
-      answerStr: "",
-      deadline: null,
-      timerHandle: null
-    };
-    showScreen("session");
-    if (type === "challenge") {
-      session.deadline = Date.now() + state.settings.challengeSeconds * 1000;
-      session.timerHandle = setInterval(tickChallengeTimer, 250);
-    }
-    loadQuestion();
-  }
-
-  function tickChallengeTimer() {
-    if (!session || session.type !== "challenge") return;
-    var remaining = session.deadline - Date.now();
-    if (remaining <= 0) {
-      finishSession();
-      return;
-    }
-    updateSessionInfo(remaining);
-  }
-
-  function updateSessionInfo(remainingMs) {
-    if (!session) { sessionInfo.textContent = ""; return; }
-    var progress = "Question " + (session.index + 1) + "/" + session.list.length;
-    if (session.type === "challenge") {
-      var s = Math.max(0, Math.ceil((remainingMs != null ? remainingMs : session.deadline - Date.now()) / 1000));
-      var mm = String(Math.floor(s / 60)).padStart(2, "0");
-      var ss = String(s % 60).padStart(2, "0");
-      sessionInfo.innerHTML = progress + '<div class="timer">' + mm + ":" + ss + "</div>";
-    } else {
-      sessionInfo.innerHTML = (MODE_LABELS[session.mode] || "") + '<div class="progress">' + progress + "</div>";
-    }
-  }
-
-  function loadQuestion() {
-    session.current = session.list[session.index];
-    session.answerStr = "";
-    session.questionStartTs = Date.now();
-    render();
-  }
-
-  function render() {
-    calcDisplay.className = "calc-display";
-    calcDisplay.textContent = session.current.text + " = ?";
-    answerDisplay.textContent = session.answerStr || " ";
-    feedback.textContent = " ";
-    feedback.className = "feedback";
-    updateSessionInfo();
-  }
-
-  function appendDigit(d) {
-    if (!session || session.answerStr.length >= 4) return;
-    session.answerStr += d;
-    answerDisplay.textContent = session.answerStr;
-  }
-
-  function eraseDigit() {
-    if (!session) return;
-    session.answerStr = session.answerStr.slice(0, -1);
-    answerDisplay.textContent = session.answerStr || " ";
-  }
-
-  function submitAnswer() {
-    if (!session || session.answerStr === "") return;
-    var value = Number(session.answerStr);
-    var elapsed = Date.now() - session.questionStartTs;
-    var correct = value === session.current.answer;
-
-    recordAttempt(session.current.key, correct, elapsed);
-
-    calcDisplay.classList.add(correct ? "flash-correct" : "flash-wrong");
-    feedback.className = "feedback " + (correct ? "correct" : "wrong");
-    feedback.textContent = correct ? pickFrom(messages) : ("Réponse : " + session.current.answer);
-
-    session.answeredCount++;
-    session.totalTimeMs += elapsed;
-    if (correct) session.correctCount++;
-    session.index++;
-
-    setTimeout(function () {
-      if (!session) return;
-      if (session.index >= session.list.length) {
-        finishSession();
-      } else {
-        loadQuestion();
-      }
-    }, correct ? 500 : 1100);
-  }
-
-  function finishSession() {
-    if (session.timerHandle) clearInterval(session.timerHandle);
-    var s = session;
-    session = null;
-    var avg = s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount / 100) / 10 : 0;
-    if (s.type === "challenge") {
-      state.challengeHistory.push({
-        date: new Date().toISOString(),
-        score: s.correctCount,
-        total: s.answeredCount,
-        avgTimeMs: s.answeredCount ? Math.round(s.totalTimeMs / s.answeredCount) : 0
-      });
-      saveState();
-    }
-    document.getElementById("result-title").textContent = s.type === "challenge"
-      ? "⏱️ Résultat du défi"
-      : "✅ Séance terminée — " + (MODE_LABELS[s.mode] || "");
-    document.getElementById("result-score").textContent = s.correctCount + " / " + s.answeredCount;
-    document.getElementById("result-time").textContent = "Temps moyen par calcul : " + avg + " s";
-    document.getElementById("result-errors").textContent = (s.answeredCount - s.correctCount) + " erreur(s)";
-    document.getElementById("btn-result-replay").onclick = function () { openSetup(s.type, s.mode); };
-    showScreen("result");
-  }
-
-  function renderStatsScreen() {
-    var body = document.getElementById("stats-body");
-    var empty = document.getElementById("stats-empty");
-    var all = worstFacts();
-    body.innerHTML = "";
-    if (!all.length) {
-      empty.classList.remove("hidden");
-    } else {
-      empty.classList.add("hidden");
-      all.forEach(function (f) {
-        var tr = document.createElement("tr");
-        var errPct = Math.round(f.errorRate * 100);
-        tr.innerHTML = "<td>" + keyToExercise(f.key).text + "</td>" +
-          "<td>" + f.attempts + "</td>" +
-          "<td>" + f.errors + " (" + errPct + "%)</td>" +
-          "<td>" + (Math.round(f.avgTime) / 1000).toFixed(1) + " s</td>";
-        body.appendChild(tr);
-      });
-    }
-  }
-
-  document.querySelectorAll("#screen-home .menu button[data-mode]").forEach(function (btn) {
-    btn.addEventListener("click", function () { openSetup("practice", btn.getAttribute("data-mode")); });
-  });
-  document.getElementById("btn-challenge").addEventListener("click", function () { openSetup("challenge", "mixed"); });
-  document.getElementById("btn-stats").addEventListener("click", function () {
-    renderStatsScreen();
-    showScreen("stats");
-  });
-  document.getElementById("btn-reset").addEventListener("click", function () {
-    if (confirm("Effacer toutes les statistiques de Léni ?")) {
-      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-      saveState();
-      alert("Statistiques réinitialisées.");
-    }
-  });
-  document.getElementById("btn-stats-home").addEventListener("click", function () { showScreen("home"); });
-  document.getElementById("btn-review-worst").addEventListener("click", function () { openSetup("practice", "review"); });
-  document.getElementById("btn-result-home").addEventListener("click", function () { showScreen("home"); });
-
-  document.getElementById("setup-sizes").addEventListener("click", function (e) {
-    var btn = e.target.closest("button[data-size]");
-    if (!btn || !pendingSession) return;
-    var size = Number(btn.getAttribute("data-size"));
-    state.settings.sessionSize = size;
-    saveState();
-    startSession(pendingSession.type, pendingSession.mode, size);
-    pendingSession = null;
-  });
-  document.getElementById("btn-setup-back").addEventListener("click", function () {
-    pendingSession = null;
-    showScreen("home");
-  });
-
-  document.getElementById("btn-back").addEventListener("click", function () {
-    if (session && session.timerHandle) clearInterval(session.timerHandle);
-    session = null;
-    showScreen("home");
-  });
-
-  document.getElementById("keypad").addEventListener("click", function (e) {
-    var btn = e.target.closest(".key");
-    if (!btn || !session) return;
-    var k = btn.getAttribute("data-key");
-    if (k === "back") eraseDigit();
-    else if (k === "ok") submitAnswer();
-    else appendDigit(k);
-  });
-
-  document.addEventListener("keydown", function (e) {
-    if (!session || screens.session.classList.contains("hidden")) return;
-    if (e.key >= "0" && e.key <= "9") appendDigit(e.key);
-    else if (e.key === "Backspace") eraseDigit();
-    else if (e.key === "Enter") submitAnswer();
-  });
-
-  showScreen("home");
-})();
-</script>
+<script src="js/learning.js"></script>
+<script src="exercises.config.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
